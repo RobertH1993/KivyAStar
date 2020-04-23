@@ -6,6 +6,7 @@ from kivy.clock import Clock
 from kivy.core.window import Window
 
 from AStar import AStarRoute
+import gc
 
 import random
 
@@ -16,6 +17,9 @@ class GridField(Widget):
     START_PIXEL = 2
     END_PIXEL = 3
     PATH_PIXEL = 4
+    OPEN_NODE_PIXEL = 5
+    CLOSED_NODE_PIXEL = 6
+
 
     def __init__(self):
         super(GridField, self).__init__()
@@ -24,8 +28,11 @@ class GridField(Widget):
         self._start_position = None
         self._end_position = None
 
+        # Routing
+        self._route = None
+
         # Config
-        self._n_pixels = 60
+        self._n_pixels = 80
 
         # Dynamic
         self._pixel_width = 0
@@ -70,6 +77,10 @@ class GridField(Widget):
                 Color(255, 0, 0)
             elif pixel_type == GridField.PATH_PIXEL:
                 Color(1, 1, 0)
+            elif pixel_type == GridField.OPEN_NODE_PIXEL:
+                Color(1, 0, 1)
+            elif pixel_type == GridField.CLOSED_NODE_PIXEL:
+                Color(0, 0, 1)
             else:
                 raise ValueError("Invalid pixel type: ", pixel_type)
 
@@ -110,34 +121,42 @@ class GridField(Widget):
 
     def _on_keyboard_down(self, keyboard, keycode, text, modifiers):
         if keycode[1] == 'r':
+            self.canvas.clear()
+
+            self.clear_widgets()
             self._randomize_grid()
             self._grid_needs_update = True
         if keycode[1] == 's':
             print("Got start")
-            route = AStarRoute(self._grid)
-            end_node = route.start(self._start_position, self._end_position)
-            if not end_node:
-                print("No route to end!")
-                return
+            self._route = AStarRoute(self._grid, self._start_position, self._end_position, self)
+        if keycode[1] == 'd':
+            self._route.step()
 
-            current_node = end_node
-            while current_node.parent:
-                current_node = current_node.parent
-                self.update_pixel(current_node.position[0],
-                                  current_node.position[1],
-                                  GridField.PATH_PIXEL)
 
     def update(self, dt):
         if self._grid_needs_update:
             self._draw_grid()
+
             self._grid_needs_update = False
+
+        if self._route:
+            end_node = self._route.step()
+            if end_node:
+                current_node = end_node
+                while current_node.parent:
+                    current_node = current_node.parent
+                    self.update_pixel(current_node.position[0],
+                                      current_node.position[1],
+                                      GridField.PATH_PIXEL)
+
+                self._route = None
 
 
 class AStar(App):
     def build(self):
 
         game = GridField()
-        Clock.schedule_interval(game.update, 1.0 / 60.0)
+        Clock.schedule_interval(game.update, 1.0 / 120.0)
         return game
 
 
